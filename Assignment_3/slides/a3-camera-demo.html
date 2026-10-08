@@ -1,0 +1,414 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>A3 Camera Explorer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&family=STIX+Two+Text:ital,wght@1,400;1,600&display=swap">
+<style>
+/* Layout: one wide side-view diagram (the README's y-z figure) beside a narrow control rail; stacks on narrow screens. */
+:root {
+  --bg: #f4f6f9;
+  --panel: #ffffff;
+  --ink: #1b2230;
+  --muted: #5d6678;
+  --line: #cfd5df;
+  --ray: #2b62c9;
+  --frust: rgba(43, 98, 201, 0.07);
+  --sensor: #c23f4d;
+  --lens: #c98b12;
+  --scene: #8a94a3;
+  --scene-fill: rgba(138, 148, 163, 0.10);
+  --code-bg: #f0f2f6;
+  --hl: rgba(201, 139, 18, 0.18);
+  --f-ui: "Public Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --f-mono: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
+  --f-math: "STIX Two Text", "Times New Roman", Times, serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #10141b; --panel: #171d26; --ink: #e4e8ef; --muted: #98a2b3; --line: #2b3441;
+    --ray: #6f9dff; --frust: rgba(111, 157, 255, 0.09); --sensor: #ff6d7a; --lens: #f0b648;
+    --scene: #7f8b9d; --scene-fill: rgba(127, 139, 157, 0.12); --code-bg: #1d2430; --hl: rgba(240, 182, 72, 0.18);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #10141b; --panel: #171d26; --ink: #e4e8ef; --muted: #98a2b3; --line: #2b3441;
+  --ray: #6f9dff; --frust: rgba(111, 157, 255, 0.09); --sensor: #ff6d7a; --lens: #f0b648;
+  --scene: #7f8b9d; --scene-fill: rgba(127, 139, 157, 0.12); --code-bg: #1d2430; --hl: rgba(240, 182, 72, 0.18);
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body { background: var(--bg); color: var(--ink); font-family: var(--f-ui); font-size: 15px; line-height: 1.45; }
+.app { max-width: 1320px; margin: 0 auto; padding-inline: 20px; padding-block: 20px 28px; display: grid; gap: 16px; background: var(--bg); }
+.app:fullscreen { max-width: none; padding-inline: 28px; overflow: auto; }
+header { display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: 12px; }
+.eyebrow { font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+h1 { margin: 2px 0 0; font-size: 26px; font-weight: 700; text-wrap: balance; }
+.hdr-actions { display: flex; gap: 8px; }
+button { font: inherit; font-size: 13px; font-weight: 600; color: var(--ink); background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 7px 12px; cursor: pointer; }
+button:hover { border-color: var(--muted); }
+button:focus-visible, input:focus-visible { outline: 2px solid var(--ray); outline-offset: 2px; }
+.stage { display: grid; grid-template-columns: minmax(0, 1fr) 370px; gap: 16px; align-items: start; }
+figure { margin: 0; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 10px; min-width: 0; }
+svg { display: block; width: 100%; height: auto; }
+figcaption { padding: 6px 8px 2px; color: var(--muted); font-size: 14px; max-width: 80ch; }
+.rail { display: grid; gap: 14px; min-width: 0; }
+.group { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px; display: grid; gap: 12px; }
+.seg { display: grid; grid-template-columns: 1fr 1fr; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.seg button { border: 0; border-radius: 0; background: transparent; color: var(--muted); }
+.seg button[aria-pressed="true"] { background: var(--ink); color: var(--panel); }
+.ctl { display: grid; gap: 4px; }
+.ctl label { display: flex; justify-content: space-between; gap: 8px; font-size: 13px; }
+.ctl code, .val { font-family: var(--f-mono); font-size: 12.5px; }
+.val { color: var(--muted); font-variant-numeric: tabular-nums; }
+input[type=range] { width: 100%; accent-color: var(--ray); }
+.ctl.lens input[type=range] { accent-color: var(--lens); }
+.ctl.sensor input[type=range] { accent-color: var(--sensor); }
+.toggles { display: grid; gap: 8px; font-size: 13px; }
+.toggles label { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+.toggles input[type=checkbox] { accent-color: var(--ray); width: 16px; height: 16px; }
+pre { margin: 0; background: var(--code-bg); border-radius: 10px; padding: 12px; font-family: var(--f-mono); font-size: 11.5px; line-height: 1.6; overflow-x: auto; }
+pre .ln { display: block; padding-inline: 4px; border-radius: 4px; white-space: pre; }
+pre .ln.on { background: var(--hl); }
+pre .kw { color: var(--ray); }
+pre .num { color: var(--sensor); }
+pre .cm { color: var(--muted); }
+.hint { font-size: 12.5px; color: var(--muted); margin: 0; }
+/* SVG classes */
+.ax { stroke: var(--ink); stroke-width: 1.6; fill: none; }
+.tick { stroke: var(--line); stroke-width: 1; }
+.ticktx { fill: var(--muted); font-family: var(--f-mono); font-size: 13px; }
+.math { fill: var(--ink); font-family: var(--f-math); font-style: italic; font-size: 30px; }
+.mathsm { fill: var(--ink); font-family: var(--f-math); font-style: italic; font-size: 24px; }
+.lbl { fill: var(--muted); font-family: var(--f-mono); font-size: 16px; }
+.lbl-ink { fill: var(--ink); font-family: var(--f-mono); font-size: 16px; }
+.frust { fill: var(--frust); stroke: none; }
+.edge { stroke: var(--ink); stroke-width: 1.6; fill: none; }
+.guide { stroke: var(--muted); stroke-width: 1.2; stroke-dasharray: 5 5; fill: none; }
+.ray { stroke: var(--ray); stroke-width: 1.4; fill: none; opacity: 0.85; }
+.ray.faint { opacity: 0.25; }
+.sensor { stroke: var(--sensor); stroke-width: 2.4; fill: none; }
+.sensor.ghost { stroke-width: 1.6; stroke-dasharray: 4 4; opacity: 0.7; }
+.cross { stroke: var(--sensor); stroke-width: 1.8; }
+.dim { stroke: var(--ink); stroke-width: 1.2; fill: none; }
+.arc { stroke: var(--ink); stroke-width: 1.4; fill: none; }
+.arc.half { stroke: var(--sensor); stroke-dasharray: 3 3; }
+.lens { fill: var(--lens); fill-opacity: 0.28; stroke: var(--lens); stroke-width: 1.6; }
+.dof { stroke: var(--lens); stroke-width: 1.4; stroke-dasharray: 7 4; fill: none; }
+.blur { stroke: var(--lens); stroke-width: 4; stroke-linecap: round; }
+.dotA { fill: var(--lens); }
+.lbl-lens { fill: var(--lens); font-family: var(--f-mono); font-size: 16px; font-weight: 600; }
+.lbl-sensor { fill: var(--sensor); font-family: var(--f-mono); font-size: 16px; font-weight: 600; }
+.sph { fill: var(--scene-fill); stroke: var(--scene); stroke-width: 1; }
+.ground { stroke: var(--scene); stroke-width: 1.4; stroke-dasharray: 2 4; fill: none; }
+.focal { stroke: var(--lens); stroke-width: 1.4; stroke-dasharray: 10 6; fill: none; }
+.cam { fill: var(--ink); }
+.mk { fill: var(--ink); }
+@media (max-width: 960px) { .stage { grid-template-columns: minmax(0, 1fr); } }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+<style>body{margin:0}</style>
+</head>
+<body>
+
+<div class="app" id="app">
+  <header>
+    <div>
+      <div class="eyebrow">CSC 305 · Assignment 3 · Ex 1</div>
+      <h1>Camera parameters, side view</h1>
+    </div>
+    <div class="hdr-actions">
+      <button type="button" id="reset">Reset to starter values</button>
+      <button type="button" id="present">Present</button>
+    </div>
+  </header>
+
+  <div class="stage">
+    <figure>
+      <svg id="fig" viewBox="0 0 1000 600" role="img" aria-label="Side view of the camera, pixel grid and rays"></svg>
+      <figcaption id="cap"></figcaption>
+    </figure>
+
+    <div class="rail">
+      <div class="group">
+        <div class="seg" role="group" aria-label="Projection">
+          <button type="button" id="ortho" aria-pressed="true">Orthographic</button>
+          <button type="button" id="persp" aria-pressed="false">Perspective</button>
+        </div>
+        <div class="ctl sensor">
+          <label for="fov"><code>field_of_view</code><span class="val" id="fov-v"></span></label>
+          <input type="range" id="fov" min="10" max="120" step="1">
+        </div>
+        <div class="ctl sensor">
+          <label for="fl"><code>focal_length</code><span class="val" id="fl-v"></span></label>
+          <input type="range" id="fl" min="2" max="12" step="0.1">
+        </div>
+        <div class="ctl">
+          <label for="camz"><code>camera_position.z</code><span class="val" id="camz-v"></span></label>
+          <input type="range" id="camz" min="2" max="8" step="0.1">
+        </div>
+        <div class="ctl lens">
+          <label for="ap"><code>camera_aperture</code><span class="val" id="ap-v"></span></label>
+          <input type="range" id="ap" min="0" max="1" step="0.01">
+        </div>
+        <div class="toggles">
+          <label><input type="checkbox" id="dof"> Depth-of-field rays (Bonus 1)</label>
+          <div class="ctl lens" id="px-row" hidden>
+            <label for="px"><span>Pixel row to trace</span><span class="val" id="px-v"></span></label>
+            <input type="range" id="px" min="1" max="8" step="1">
+          </div>
+          <label><input type="checkbox" id="scene"> Show scene objects</label>
+          <label><input type="checkbox" id="reveal"> Reveal <code>image_y</code> and <code>image_x</code></label>
+        </div>
+      </div>
+      <pre id="code" aria-label="Camera settings in main.cpp"></pre>
+      <p class="hint">Diagram shows 8 of the 400 pixel rows. Image is 800 × 400, so the aspect ratio is 2.</p>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  const DEF = { fov: 45, camz: 5, ap: 0.05, fl: 10, imz: 10, persp: false, dof: false, px: 2, scene: false, reveal: false };
+  let S = Object.assign({}, DEF);
+  let changed = null;
+
+  const W = 1000, H = 600, ZL = 9;
+  let ZR = -10, K = W / (ZL - ZR);   // depth-of-field mode zooms out to show focal planes beyond the image plane
+  const sx = z => (ZL - z) * K;
+  const sy = y => H / 2 - y * K;
+  const ROWS = 8, ASPECT = 2;
+  const SPHERES = [[10,0,1],[7,0.05,-1],[4,0.1,1],[1,0.2,-1],[-2,0.4,1],[-5,0.8,-1],[-8,1.6,1]];
+  const f2 = v => (Math.round(v * 100) / 100).toFixed(2);
+  const f1 = v => v.toFixed(1);
+  const $ = id => document.getElementById(id);
+
+  function line(x1, y1, x2, y2, cls, extra) {
+    return `<line x1="${x1.toFixed(1)}" y1="${y1.toFixed(1)}" x2="${x2.toFixed(1)}" y2="${y2.toFixed(1)}" class="${cls}" ${extra || ''}/>`;
+  }
+  function text(x, y, s, cls, anchor) {
+    return `<text x="${x.toFixed(1)}" y="${y.toFixed(1)}" class="${cls}" text-anchor="${anchor || 'start'}">${s}</text>`;
+  }
+
+  function render() {
+    ZR = (S.persp && S.dof) ? -26 : -10;
+    K = W / (ZL - ZR);
+    $('fl').max = (S.persp && S.dof) ? 28 : 12;
+    const th = S.fov * Math.PI / 180;
+    const t = Math.tan(th / 2);
+    const D = S.imz;                // camera-to-image-plane distance (camera z + image_z)
+    const h = D * t;
+    const gz = S.camz - D;          // image plane world z = -image_z
+    const cx = sx(S.camz), cy = sy(0);
+    const far = S.camz - ZR;
+    const rowsY = [];
+    for (let j = 0; j < ROWS; j++) rowsY.push(h - (j + 0.5) * 2 * h / ROWS);
+    let o = '';
+
+    o += `<defs>
+      <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="mk"/></marker>
+      <marker id="ao" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M1,1 L9,5 L1,9" fill="none" stroke="currentColor" class="ax" style="stroke-width:1.4"/></marker>
+      <clipPath id="vp"><rect x="0" y="0" width="${W}" height="${H}"/></clipPath>
+    </defs><g clip-path="url(#vp)">`;
+
+    // z ticks
+    for (let z = 8; z >= ZR + 2; z -= (ZR < -12 ? 4 : 2)) {
+      o += line(sx(z), cy - 4, sx(z), cy + 4, 'tick');
+      o += text(sx(z), cy + 18, String(z), 'ticktx', 'middle');
+    }
+
+    // scene
+    if (S.scene) {
+      SPHERES.forEach(s => { o += `<circle cx="${sx(s[2]).toFixed(1)}" cy="${sy(s[1]).toFixed(1)}" r="${K.toFixed(1)}" class="sph"/>`; });
+      const gy = z => -0.625 + (z + 100) / 4000;
+      o += line(sx(ZL), sy(gy(ZL)), sx(ZR), sy(gy(ZR)), 'ground');
+      o += text(sx(-1), sy(2.95), 'scene, side view', 'lbl', 'middle');
+      o += text(W - 10, sy(gy(-9)) + 18, 'ground (x = 0 slice)', 'lbl', 'end');
+    }
+
+    // frustum / band
+    if (S.persp) {
+      o += `<polygon class="frust" points="${cx},${cy} ${sx(ZR)},${sy(far * t)} ${sx(ZR)},${sy(-far * t)}"/>`;
+      o += line(cx, cy, sx(ZR), sy(far * t), 'edge');
+      o += line(cx, cy, sx(ZR), sy(-far * t), 'edge');
+    } else {
+      o += `<rect class="frust" x="${cx}" y="${sy(h)}" width="${sx(ZR) - cx}" height="${2 * h * K}"/>`;
+      o += line(cx, cy, sx(gz), sy(h), 'guide');
+      o += line(cx, cy, sx(gz), sy(-h), 'guide');
+    }
+
+    const dofOn = S.persp && S.dof;
+
+    // primary rays
+    rowsY.forEach(y => {
+      if (S.persp) {
+        const yf = y * far / D;
+        o += line(cx, cy, sx(ZR), sy(yf), 'ray' + (dofOn ? ' faint' : ''));
+      } else {
+        o += line(cx, sy(y), sx(ZR), sy(y), 'ray');
+      }
+    });
+
+    // pixel grid
+    const sz = S.persp ? gz : S.camz;
+    if (!S.persp) o += line(sx(gz), sy(h), sx(gz), sy(-h), 'sensor ghost');
+    o += line(sx(sz), sy(h), sx(sz), sy(-h), 'sensor');
+    rowsY.forEach(y => {
+      const X = sx(sz), Y = sy(y), d = 5;
+      o += line(X - d, Y - d, X + d, Y + d, 'cross') + line(X - d, Y + d, X + d, Y - d, 'cross');
+    });
+    if (S.persp) {
+      o += text(sx(gz) + 8, Math.max(sy(h) - 10, 16), dofOn ? 'image plane' : 'pixel grid', 'lbl-sensor');
+    } else {
+      o += text(sx(sz) + 8, Math.max(sy(h) - 10, 16), 'ray origins', 'lbl-sensor');
+      o += text(sx(gz) + 8, Math.min(sy(-h) + 20, H - 8), 'grid used for h', 'lbl-sensor');
+    }
+
+    // h dimension
+    const hx = sx(gz) - 22;
+    if (h * K > 18 && !dofOn) {
+      o += line(hx, cy, hx, sy(h), 'dim', 'marker-start="url(#ao)" marker-end="url(#ao)" style="color:var(--ink)"');
+      const hy = Math.max(sy(h / 2), 24);
+      o += text(hx - 10, hy + 10, 'h', 'math', 'end');
+      if (S.reveal) o += text(sx(gz), Math.min(sy(-h) + 26, H - 70), 'h = image_y = ' + f2(h), 'lbl-ink', 'middle');
+    }
+
+    // image_z dimension
+    const dy = Math.min(sy(-h) + (S.reveal ? 72 : 50), H - 34);
+    o += line(cx, dy, sx(gz), dy, 'dim', 'marker-start="url(#ao)" marker-end="url(#ao)"');
+    o += text((cx + sx(gz)) / 2, dy + 30, 'f', 'mathsm', 'middle');
+    o += text((cx + sx(gz)) / 2, dy - 10, (dofOn ? 'image plane distance = ' : 'focal_length = ') + f1(D), 'lbl-ink', 'middle');
+
+    // theta arc
+    const r = 58, a = Math.atan(t);
+    const ux = cx + r * Math.cos(a), uy = cy - r * Math.sin(a);
+    const lx = cx + r * Math.cos(a), ly = cy + r * Math.sin(a);
+    o += `<path class="arc" d="M${ux.toFixed(1)},${uy.toFixed(1)} A${r},${r} 0 0 1 ${lx.toFixed(1)},${ly.toFixed(1)}"/>`;
+    o += `<path class="arc" d="M${(cx + (r + 4) * Math.cos(a)).toFixed(1)},${(cy - (r + 4) * Math.sin(a)).toFixed(1)} A${r + 4},${r + 4} 0 0 1 ${(cx + (r + 4) * Math.cos(a)).toFixed(1)},${(cy + (r + 4) * Math.sin(a)).toFixed(1)}"/>`;
+    const ta = a + 0.25;
+    o += text(cx + (r + 26) * Math.cos(ta) - 4, cy - (r + 26) * Math.sin(ta) + 2, 'θ', 'math', 'middle');
+    if (S.reveal) {
+      const r2 = 96;
+      o += `<path class="arc half" d="M${(cx + r2).toFixed(1)},${cy} A${r2},${r2} 0 0 0 ${(cx + r2 * Math.cos(a)).toFixed(1)},${(cy - r2 * Math.sin(a)).toFixed(1)}"/>`;
+      o += text(cx + r2 + 8, cy - r2 * Math.sin(a / 2) + 2, 'θ/2', 'lbl-sensor');
+    }
+
+    // DOF: aperture samples converge on the focal plane at distance focal_length, along the pixel's primary ray
+    if (dofOn) {
+      const ap = S.ap, yp = rowsY[S.px - 1], fl = S.fl;
+      const yF = yp * fl / D;                   // focus point: primary ray meets the focal plane
+      const fpz = S.camz - fl;
+      if (fpz > ZR) {
+        o += line(sx(fpz), 24, sx(fpz), H - 24, 'focal');
+        o += text(sx(fpz) + 8, 42, 'focal plane', 'lbl-lens');
+        o += text(sx(fpz) + 8, 62, 'focal_length = ' + f1(fl), 'lbl-lens');
+      }
+      const yAt = (yo, d) => yo + (yF - yo) * d / fl;
+      const M = 7;
+      o += line(cx, cy, sx(ZR), sy(yp * far / D), 'ray');
+      for (let k = 0; k < M; k++) {
+        const yo = -ap + 2 * ap * k / (M - 1);
+        o += line(cx, sy(yo), sx(ZR), sy(yAt(yo, far)), 'dof');
+      }
+      const fz = S.camz - fl;
+      if (fz > ZR) {
+        o += `<circle cx="${sx(fz)}" cy="${sy(yF)}" r="5" class="dotA"/>`;
+        o += text(sx(fz) + (fz < gz ? 12 : -12), sy(yF) - 12, 'A: sharp', 'lbl-lens', fz < gz ? 'start' : 'end');
+      }
+      const mark = (d, name) => {
+        const z = S.camz - d;
+        if (z <= ZR + 0.3 || d <= 0.3) return;
+        const y1 = yAt(-ap, d), y2 = yAt(ap, d);
+        const spread = 2 * ap * Math.abs(d - fl) / fl;
+        const bx = sx(z), top = Math.min(sy(y1), sy(y2)), bot = Math.max(sy(y1), sy(y2));
+        o += line(bx, top - 2, bx, bot + 2, 'blur');
+        const anc = bx > W - 110 ? 'end' : 'middle', tx = bx > W - 110 ? W - 6 : bx;
+        o += text(tx, bot + 24, name + ': blurred', 'lbl-lens', anc);
+        o += text(tx, bot + 44, 'spread ' + f2(spread), 'lbl-lens', anc);
+      };
+      mark(fl * 0.4, 'B');
+      mark(fl * 1.4, 'C');
+    }
+
+    // axes on top
+    o += line(sx(ZR), cy, 14, cy, 'ax', 'marker-end="url(#ah)"');
+    o += text(20, cy + 30, 'z', 'math');
+    o += line(cx, cy, cx, cy - 92, 'ax', 'marker-end="url(#ah)"');
+    o += text(cx - 18, cy - 92, 'y', 'math', 'end');
+    if (S.persp && S.dof) {
+      o += `<ellipse cx="${cx}" cy="${cy}" rx="7" ry="${Math.max(S.ap * K, 2).toFixed(1)}" class="lens"/>`;
+      o += text(cx, cy + Math.max(S.ap * K, 2) + 46, 'aperture', 'lbl-lens', 'middle');
+    }
+    o += `<circle cx="${cx}" cy="${cy}" r="5" class="cam"/>`;
+    o += text(cx - 10, cy - 12, 'camera', 'lbl', 'end');
+    o += '</g>';
+    $('fig').innerHTML = o;
+
+    // caption
+    let cap;
+    if (dofOn) cap = 'Depth of field: the image plane stays fixed and still sets the field of view. Rays start at random points on the aperture and meet where the pixel’s primary ray crosses the focal plane at focal_length. Objects on the focal plane (A) stay sharp; nearer (B) or farther (C) objects blur, more so with a larger aperture. Drag focal_length to move the focus.';
+    else if (S.persp) cap = 'Perspective: every ray starts at the camera and passes through one pixel center. The grid sits at focal_length from the camera. Changing focal_length rescales h but keeps every ray direction, so only θ changes the image.';
+    else cap = 'Orthographic: rays start on the camera plane at each pixel’s (x, y) and travel along −z. The same h, set by θ and focal_length, decides how much of the scene the image covers.';
+    $('cap').textContent = cap;
+
+    // controls
+    $('fov-v').textContent = S.fov + '° (' + (th).toFixed(4) + ' rad)';
+    $('camz-v').textContent = f1(S.camz);
+    $('ap-v').textContent = S.ap.toFixed(2);
+    $('fl-v').textContent = f1(S.fl);
+    $('px-v').textContent = S.px + ' of 8';
+    $('px-row').hidden = !S.dof;
+    $('ortho').setAttribute('aria-pressed', String(!S.persp));
+    $('persp').setAttribute('aria-pressed', String(S.persp));
+    ['fov','camz','ap','fl','px'].forEach(k => { if ($(k).value != S[k]) $(k).value = S[k]; });
+    ['dof','scene','reveal'].forEach(k => { $(k).checked = S[k]; });
+
+    // code readout
+    const ln = (key, html) => `<span class="ln${changed === key ? ' on' : ''}">${html}</span>`;
+    const kw = s => `<span class="kw">${s}</span>`, nm = s => `<span class="num">${s}</span>`, cm = s => `<span class="cm">${s}</span>`;
+    let c = cm('//Camera settings') + '\n';
+    c += ln('fl', `${kw('const double')} focal_length = ${nm(f1(S.fl).replace(/\.0$/, ''))};`) ;
+    c += ln('fov', `${kw('const double')} field_of_view = ${nm(th.toFixed(4))}; ${cm('//' + S.fov + ' degrees')}`);
+    c += `<span class="ln${changed === 'fl' || changed === 'camz' ? ' on' : ''}">${kw('const double')} image_z = ${nm(f1(S.imz - S.camz).replace(/\.0$/, ''))}; ${cm('// grid z = -image_z')}</span>`;
+    c += ln('persp', `${kw('const bool')} is_perspective = ${nm(String(S.persp))};`);
+    c += ln('camz', `${kw('const')} Vector3d camera_position(${nm('0')}, ${nm('0')}, ${nm(f1(S.camz).replace(/\.0$/, ''))});`);
+    c += ln('ap', `${kw('const double')} camera_aperture = ${nm(S.ap.toFixed(2))};`);
+    c += '\n' + cm(Math.abs(S.imz - S.fl) < 1e-9 ? '// camera z + image_z = focal_length' : '// focal plane ' + f1(Math.abs(S.fl - S.imz)) + (S.fl > S.imz ? ' beyond' : ' in front of') + ' the image plane');
+    if (S.reveal) {
+      c += '\n' + cm('// derived in raytrace_scene()') + '\n';
+      c += `image_y = ${nm(h.toFixed(3))};\nimage_x = ${nm((ASPECT * h).toFixed(3))};`;
+    }
+    $('code').innerHTML = c;
+  }
+
+  function bindRange(id, parse) {
+    $(id).addEventListener('input', e => { S[id] = parse(e.target.value); changed = id; render(); });
+  }
+  bindRange('fov', v => parseInt(v, 10));
+  bindRange('camz', parseFloat);
+  bindRange('ap', parseFloat);
+  $('fl').addEventListener('input', e => { S.fl = parseFloat(e.target.value); if (!(S.persp && S.dof)) S.imz = S.fl; changed = 'fl'; render(); });
+  bindRange('px', v => parseInt(v, 10));
+  ['scene','reveal'].forEach(id => $(id).addEventListener('change', e => { S[id] = e.target.checked; changed = null; render(); }));
+  $('dof').addEventListener('change', e => { S.dof = e.target.checked; if (S.dof) S.persp = true; else S.fl = S.imz; changed = S.dof ? 'ap' : null; render(); });
+  $('ortho').addEventListener('click', () => { S.persp = false; S.dof = false; S.fl = S.imz; changed = 'persp'; render(); });
+  $('persp').addEventListener('click', () => { S.persp = true; changed = 'persp'; render(); });
+  $('reset').addEventListener('click', () => { S = Object.assign({}, DEF); changed = null; render(); });
+  $('present').addEventListener('click', () => {
+    const el = $('app');
+    try {
+      if (document.fullscreenElement) document.exitFullscreen();
+      else if (el.requestFullscreen) el.requestFullscreen().catch(() => {});
+    } catch (e) {}
+  });
+  document.addEventListener('fullscreenchange', () => { $('present').textContent = document.fullscreenElement ? 'Exit' : 'Present'; });
+  render();
+})();
+</script>
+</body>
+</html>
