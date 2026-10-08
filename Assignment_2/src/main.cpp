@@ -2,6 +2,7 @@
 #include <iostream>
 #include <string>
 #include <vector>
+#include <cmath>
 
 // Utilities for the Assignment
 #include "utils.h"
@@ -12,6 +13,11 @@
 
 // Shortcut to avoid Eigen:: everywhere, DO NOT USE IN .h
 using namespace Eigen;
+
+
+
+
+
 
 void raytrace_sphere()
 {
@@ -48,27 +54,40 @@ void raytrace_sphere()
 
             // Intersect with the sphere
             // NOTE: this is a special case of a sphere centered in the origin and for orthographic rays aligned with the z axis
-            // TODO change this with the generic case
-            Vector2d ray_on_xy(ray_origin(0), ray_origin(1));
+            const Vector3d center_to_ray_origin = ray_origin - sphere_center;
 
-            if (ray_on_xy.norm() < sphere_radius)
-            {
-                // The ray hit the sphere, compute the exact intersection point
-                Vector3d ray_intersection(
-                    ray_on_xy(0), ray_on_xy(1),
-                    sqrt(sphere_radius * sphere_radius - ray_on_xy.squaredNorm()));
+            const double a = ray_direction.dot(ray_direction);
+            const double b = 2 * ray_direction.dot(center_to_ray_origin);
+            const double c = center_to_ray_origin.dot(center_to_ray_origin) - sphere_radius * sphere_radius;
 
-                // Compute normal at the intersection point
-                Vector3d ray_normal = ray_intersection.normalized();
+            // Determine the number of solutions present
+            const double discriminant = b * b - 4.0 * a * c;
 
-                // Simple diffuse model
-                C(i, j) = (light_position - ray_intersection).normalized().transpose() * ray_normal;
 
-                // Clamp to zero
-                C(i, j) = std::max(C(i, j), 0.);
+            if(discriminant >= 0){
+                const double square_root = std::sqrt(discriminant);
+                
+                double t = -1.0; // if it remains -1.0 it means we have not found a valid root yet
+                const double t1 = (-b - square_root) / (2.0 * a);
+                const double t2 = (-b + square_root) / (2.0 * a);
+                
+                if(t1 >= 0.0) t = t1; // t1 is closer to the root
+                else if(t2 >= 0.0) t = t2; // t1 could be behind us
+                
+                if(t >= 0.0){
+                    const Vector3d ray_intersection = ray_origin + t * ray_direction;
+                    const Vector3d ray_normal = (ray_intersection - sphere_center).normalized();
+                    const Vector3d light_direction = (light_position - ray_intersection).normalized(); 
+                    
+                    C(i, j) = light_direction.dot(ray_normal);
 
-                // Disable the alpha mask for this pixel
-                A(i, j) = 1;
+                    // Clamp to zero
+                    C(i, j) = std::max(C(i, j), 0.0);
+
+                    // Disable the alpha mask for this pixel
+                    A(i, j) = 1.0;
+                }
+            
             }
         }
     }
